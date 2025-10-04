@@ -28,25 +28,24 @@
     <main class="page__main">
       <section class="hero">
         <div class="hero__content">
-          <h1 class="hero__title">Проверьте загруженность парковки по номеру</h1>
-          <p class="hero__subtitle">Введите номер парковочной зоны, чтобы узнать текущий уровень загруженности в реальном времени.</p>
+          <h1 class="hero__title">Найдите ближайшую парковку по координатам</h1>
+          <p class="hero__subtitle">Укажите широту и долготу, чтобы получить информацию о ближайшей парковке и её загруженности.</p>
 
           <form class="lookup" id="lookup-form" novalidate>
-            <label class="lookup__label" for="parking-number">Номер парковки</label>
+            <label class="lookup__label" for="parking-number">Координаты (широта, долгота)</label>
             <div class="lookup__controls">
               <input
                 class="lookup__input"
                 type="text"
                 id="parking-number"
                 name="parking-number"
-                inputmode="numeric"
-                placeholder="Например, 1206"
+                placeholder="Например, 55.7418, 37.6308"
                 required
                 aria-describedby="lookup-hint"
               />
               <button class="lookup__submit" type="submit">Проверить</button>
             </div>
-            <p class="lookup__hint" id="lookup-hint">Минимум 3 цифры. После отправки данные придут с вашего бэкенда.</p>
+            <p class="lookup__hint" id="lookup-hint">Введите широту и долготу через запятую или пробел (например, 55.7418, 37.6308).</p>
             <p class="lookup__error" id="lookup-error" role="alert" hidden></p>
           </form>
         </div>

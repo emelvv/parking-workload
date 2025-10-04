@@ -68,12 +68,30 @@ document.addEventListener('DOMContentLoaded', () => {
       clearError();
 
       const rawValue = input.value.trim();
-      if (!rawValue) {
-        showError('Введите номер парковки.');
+      const coords = parseCoordinates(rawValue);
+      if (!coords) {
+        showError('Введите координаты в формате "широта, долгота".');
         return;
       }
 
-      await requestStatus(rawValue);
+      const [latCoord, lngCoord] = coords;
+
+      if (input) toggleForm(false, 'Ищем...');
+
+      try {
+        if (map && typeof map.setCenter === 'function') {
+          try {
+            map.setCenter([lngCoord, latCoord], { easing: 'easeOutCubic', duration: 500 });
+            map.setZoom(16, { easing: 'easeOutCubic', duration: 500 });
+          } catch (err) {
+            console.warn('Не удалось центрировать карту:', err);
+          }
+        }
+
+        await get_park_on_coords(latCoord, lngCoord);
+      } finally {
+        if (input) toggleForm(true);
+      }
     });
   }
 
@@ -339,6 +357,18 @@ document.addEventListener('DOMContentLoaded', () => {
   function escapeHtml(text) {
     if (text == null) return '';
     return String(text).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  }
+
+  function parseCoordinates(value) {
+    if (!value) return null;
+    const normalized = value.replace(/\s+/g, ' ').trim();
+    const parts = normalized.split(/[,\s]+/).filter(Boolean);
+    if (parts.length !== 2) return null;
+    const lat = Number(parts[0]);
+    const lng = Number(parts[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return [lat, lng];
   }
 
   function renderNearestParkingCard(parking, epoData) {

@@ -428,3 +428,33 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* styles.css — добавьте в конец файла */
+
+/* Убедимся, что карточка карты растягивается и карта имеет явную высоту */
+.hero__card {
+  /* делает карточку гибкой — при необходимости настройте max-width */
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  /* можно задать фиксированную высоту или адаптивную */
+  min-height: 320px;      /* минимальная высота для мобильных */
+  height: 420px;          /* желаемая высота на десктопе */
+  border-radius: 12px;
+  overflow: hidden;       /* обрезаем выходящий контент */
+  background: #f8f9fb;
+  box-shadow: 0 6px 18px rgba(20,20,40,0.05);
+}
+
+/* Сам контейнер карты должен занимать весь родительский блок */
+#map {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  display: block;
+}
+
+/* На маленьких экранах можно уменьшить высоту */
+@media (max-width: 640px) {
+  .hero__card { height: 320px; }
+}

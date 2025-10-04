@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Парковки Москвы — Статус загруженности</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="page__header">
+      <div class="brand">
+        <div class="brand__logo" aria-hidden="true">P</div>
+        <div class="brand__titles">
+          <span class="brand__name">Moscow Parking</span>
+          <span class="brand__tagline">Мониторинг загруженности</span>
+        </div>
+      </div>
+      <nav class="page__nav">
+        <a href="#how" class="page__nav-link">Как это работает</a>
+        <a href="#faq" class="page__nav-link">FAQ</a>
+      </nav>
+    </header>
+
+    <main class="page__main">
+      <section class="hero">
+        <div class="hero__content">
+          <h1 class="hero__title">Проверьте загруженность парковки по номеру</h1>
+          <p class="hero__subtitle">Введите номер парковочной зоны, чтобы узнать текущий уровень загруженности в реальном времени.</p>
+
+          <form class="lookup" id="lookup-form" novalidate>
+            <label class="lookup__label" for="parking-number">Номер парковки</label>
+            <div class="lookup__controls">
+              <input
+                class="lookup__input"
+                type="text"
+                id="parking-number"
+                name="parking-number"
+                inputmode="numeric"
+                placeholder="Например, 1206"
+                required
+                aria-describedby="lookup-hint"
+              />
+              <button class="lookup__submit" type="submit">Проверить</button>
+            </div>
+            <p class="lookup__hint" id="lookup-hint">Минимум 3 цифры. После отправки данные придут с вашего бэкенда.</p>
+            <p class="lookup__error" id="lookup-error" role="alert" hidden></p>
+          </form>
+        </div>
+
+        <div class="hero__card" id="status-card" aria-live="polite">
+          <div id="map" class="status-card status-card--empty">
+          </div>
+        </div>
+      </section>
+
+      <section class="info" id="how">
+        <h2 class="info__title">Как это работает</h2>
+        <div class="info__grid">
+          <article class="info__card">
+            <h3>1. Отправьте номер</h3>
+            <p>Введите код парковочной зоны в форме выше.</p>
+          </article>
+          <article class="info__card">
+            <h3>2. Получите данные</h3>
+            <p>Бэкенд возвращает актуальную информацию: количество занятых мест, общий парк, статус.</p>
+          </article>
+          <article class="info__card">
+            <h3>3. Следите за обновлениями</h3>
+            <p>Мы визуализируем загруженность и отметим актуальность данных, чтобы водитель принимал решение быстро.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="faq" id="faq">
+        <h2 class="faq__title">Частые вопросы</h2>
+        <details class="faq__item">
+          <summary>По каким признакам идёт подсчёт вероятности загруженности?</summary>
+          <p>Минимально — процент загруженности либо число занятых и свободных мест. Опционально дата обновления и статус (свободно/плотно/переполнено).</p>
+        </details>
+        <details class="faq__item">
+          <summary>Когда будет доступна карта?</summary>
+          <p>Следите за обновлениями — виджет появится автоматически, как только будет готов.</p>
+        </details>
+        <details class="faq__item">
+          <summary>Что произойдет при ошибке?</summary>
+          <p>Пользователь увидит уведомление с причиной (например, нет связи или парковка не найдена).</p>
+        </details>
+      </section>
+    </main>
+
+    <footer class="page__footer">
+      <p>Данные предоставляются из общедоступных источников. Обновление информации зависит от скорости обновления источников.</p>
+    </footer>
+  </div>
+  
+  <script src="https://mapgl.2gis.com/api/js/v1"></script>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

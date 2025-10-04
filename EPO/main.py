@@ -1,46 +1,49 @@
+from flask import Flask, request, jsonify
 import math
+from datetime import datetime
 
-import math
+app = Flask(__name__)
 
-def estimate_parking_occupancy(cost, distance, spots):
+def estimate_parking_occupancy(cost, distance, spots, hour=None):
     """
     Оценивает загруженность парковки (0-1) на основе параметров.
-    Использует непрерывные математические функции для моделирования реальных зависимостей.
     """
-    # 1. Моделирование влияния расстояния (экспоненциальное затухание)
-    # Чем ближе к центру, тем выше загруженность
-    distance_factor = math.exp(-distance / 2.0)  # Полураспад на 2 км
+    # 1. Моделирование влияния расстояния
+    distance_factor = math.exp(-distance / 2.0)
     
-    # 2. Моделирование влияния цены (логистическая функция)
-    # Бесплатные парковки почти всегда заняты, с ростом цены загруженность падает
-    price_factor = 1.0 / (1.0 + math.exp((cost - 100) / 50))  # Переход вокруг 100 руб
+    # 2. Моделирование влияния цены
+    price_factor = 1.0 / (1.0 + math.exp((cost - 100) / 50))
     
-    # 3. Моделирование влияния количества мест (логарифмическое)
-    # Больше мест = ниже вероятность что конкретное место занято
+    # 3. Моделирование влияния количества мест
     spots_factor = 1.0 / (1.0 + math.log(1 + spots) / 3.0)
     
-    # 4. Базовый уровень загруженности для центра города
+    # 4. Моделирование временного фактора
+    if hour is not None:
+        normalized_hour = (hour + 1) % 24
+        time_factor = 0.3 + 0.7 * math.exp(-((normalized_hour - 13) ** 2) / 8.0)
+    else:
+        time_factor = 0.65
+    
+    # 5. Базовый уровень загруженности
     base_demand = 0.85
     
-    # 5. Комбинируем факторы с весами, отражающими их важность
-    # Расстояние наиболее важно, затем цена, затем количество мест
+    # 6. Комбинируем факторы
     probability = (
-        base_demand * 0.5 + 
-        distance_factor * 0.3 + 
+        base_demand * 0.4 + 
+        distance_factor * 0.25 + 
         price_factor * 0.15 + 
-        spots_factor * 0.05
+        spots_factor * 0.05 +
+        time_factor * 0.15
     )
     
-    # 6. Нелинейная корректировка для крайних случаев
-    # Бесплатные парковки в центре должны быть почти всегда заняты
+    # 7. Корректировка для крайних случаев
     if cost == 0 and distance <= 1.0:
         probability = max(probability, 0.9 - distance * 0.2)
     
-    # Очень дорогие парковки должны быть почти всегда пусты
     if cost > 500:
         probability = min(probability, 0.3 * (1 - cost / 2000))
     
-    # 7. Гарантируем разумные границы
+    # 8. Гарантируем разумные границы
     probability = max(0.05, min(0.95, probability))
     
     return round(probability, 3)
@@ -60,10 +63,6 @@ def get_occupancy_level(probability):
     else:
         return "очень высокая"
 
-from flask import Flask, request, jsonify
-
-app = Flask(__name__)
-
 @app.route('/api/parking/occupancy', methods=['GET', 'POST'])
 def parking_occupancy():
     """
@@ -75,12 +74,30 @@ def parking_occupancy():
             cost = float(request.args.get('cost'))
             distance = float(request.args.get('distance'))
             spots = int(request.args.get('spots'))
+            hour_str = request.args.get('hour')
         else:
             # Для POST запроса - параметры в JSON теле
             data = request.get_json()
             cost = float(data.get('cost'))
             distance = float(data.get('distance'))
             spots = int(data.get('spots'))
+            hour_str = data.get('hour')
+        
+        # Обработка параметра времени
+        if hour_str is not None:
+            try:
+                hour = int(hour_str)
+                if hour < 0 or hour > 23:
+                    return jsonify({
+                        'error': 'Hour must be between 0 and 23'
+                    }), 400
+            except ValueError:
+                return jsonify({
+                    'error': 'Hour must be an integer between 0 and 23'
+                }), 400
+        else:
+            # Если время не указано, используем текущий час
+            hour = datetime.now().hour
         
         # Проверка обязательных параметров
         if cost is None or distance is None or spots is None:
@@ -95,7 +112,7 @@ def parking_occupancy():
             }), 400
         
         # Расчёт вероятности
-        probability = estimate_parking_occupancy(cost, distance, spots)
+        probability = estimate_parking_occupancy(cost, distance, spots, hour)
         
         # Формирование ответа
         response = {
@@ -104,9 +121,11 @@ def parking_occupancy():
             'parameters': {
                 'cost': cost,
                 'distance': distance,
-                'spots': spots
+                'spots': spots,
+                'hour': hour
             },
-            'occupancy_level': get_occupancy_level(probability)
+            'occupancy_level': get_occupancy_level(probability),
+            'time_context': get_time_context(hour)
         }
         
         return jsonify(response)
@@ -119,6 +138,23 @@ def parking_occupancy():
         return jsonify({
             'error': f'Internal server error: {str(e)}'
         }), 500
+
+def get_time_context(hour):
+    """
+    Возвращает контекстное описание времени суток
+    """
+    if 0 <= hour < 6:
+        return "ночь (минимум загруженности)"
+    elif 6 <= hour < 10:
+        return "утро (растущая загруженность)"
+    elif 10 <= hour < 14:
+        return "обеденное время (пик загруженности)"
+    elif 14 <= hour < 18:
+        return "день (высокая загруженность)"
+    elif 18 <= hour < 22:
+        return "вечер (спадающая загруженность)"
+    else:
+        return "поздний вечер (низкая загруженность)"
 
 @app.route('/api/health', methods=['GET'])
 def health_check():

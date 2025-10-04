@@ -1,0 +1,24 @@
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /go/src/gateway
+ENV CGO_ENABLED=0 GO111MODULE=off
+
+COPY start.go ./
+COPY public ./public
+
+RUN go build -o /go/bin/gateway start.go
+
+FROM alpine:3.19
+WORKDIR /app
+
+COPY --from=builder /go/bin/gateway /app/server
+COPY --from=builder /go/src/gateway/public /app/public
+
+ENV FRONTEND_PORT=12300 \
+    PARSER_BASE_URL=http://parser:8000 \
+    EPO_BASE_URL=http://epo:5000 \
+    STATIC_DIR=/app/public
+
+EXPOSE 12300
+
+CMD ["/app/server"]

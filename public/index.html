@@ -52,9 +52,23 @@
         </div>
 
         <div class="hero__card" id="status-card" aria-live="polite">
-          <div id="map" class="status-card status-card--empty">
+          <div class="status-card status-card--empty">
+            <div class="status-card__placeholder">
+              <span class="status-card__emoji" aria-hidden="true">🚗</span>
+              <p class="status-card__text">Здесь появится информация о загруженности выбранной парковки.</p>
+            </div>
           </div>
         </div>
+      </section>
+
+      <section class="map-section" id="parking-map">
+        <div class="map-section__header">
+          <h2 class="map-section__title">Карта парковок</h2>
+        </div>
+        <div class="map-section__container" id="map-container">
+          <div class="map-section__canvas" id="map"></div>
+        </div>
+        <div class="map-section__epo" id="epo-result" aria-live="polite"></div>
       </section>
 
       <section class="info" id="how">

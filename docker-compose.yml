@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  parser:
+    build:
+      context: ./parser
+    container_name: parser
+    env_file:
+      - parser/.env
+    ports:
+      - "8001:8000"
+
+  epo:
+    build:
+      context: ./EPO
+    container_name: epo
+    env_file:
+      - EPO/.env
+    ports:
+      - "5000:5000"
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    container_name: parking-gateway
+    depends_on:
+      - parser
+      - epo
+    environment:
+      - FRONTEND_PORT=12300
+      - PARSER_BASE_URL=http://parser:8000
+      - EPO_BASE_URL=http://epo:5000
+      - STATIC_DIR=/app/public
+    ports:
+      - "12300:12300"

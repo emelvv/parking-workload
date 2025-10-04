@@ -9,47 +9,49 @@ app = Flask(__name__)
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 def estimate_parking_occupancy(cost, distance, spots, hour=None):
-    """
-    Оценивает загруженность парковки (0-1) на основе параметров.
-    """
-    # 1. Моделирование влияния расстояния
-    distance_factor = math.exp(-distance / 2.0)
-    
-    # 2. Моделирование влияния цены
-    price_factor = 1.0 / (1.0 + math.exp((cost - 100) / 50))
-    
-    # 3. Моделирование влияния количества мест
-    spots_factor = 1.0 / (1.0 + math.log(1 + spots) / 3.0)
-    
-    # 4. Моделирование временного фактора
+    """Оценивает загруженность парковки (0-1) на основе параметров."""
+
+    # 1. Близость к центру: чем ближе, тем сильнее спрос
+    distance_factor = 0.45 + 0.55 * math.exp(-max(distance, 0.0) / 0.8)
+
+    # 2. Стоимость: дорогие парковки чуть менее привлекательны, но не критично
+    baseline_cost = 300.0
+    effective_cost = max(cost - baseline_cost, 0.0)
+    price_factor = 0.74 + 0.26 * math.exp(-effective_cost / 1000.0)
+
+    # 3. Количество мест: маленькие парковки быстрее заполняются
+    spots_factor = 0.6 + 0.4 * math.exp(-max(spots, 1) / 120.0)
+
+    # 4. Временной фактор
     if hour is not None:
-        normalized_hour = (hour + 1) % 24
-        time_factor = 0.3 + 0.7 * math.exp(-((normalized_hour - 13) ** 2) / 8.0)
+        normalized_hour = int(hour) % 24
+        time_factor = 0.4 + 0.6 * math.exp(-((normalized_hour - 13) ** 2) / 16.0)
     else:
         time_factor = 0.65
-    
-    # 5. Базовый уровень загруженности
-    base_demand = 0.85
-    
-    # 6. Комбинируем факторы
+
+    # 5. Базовый спрос
+    base_demand = 0.67
+
+    # 6. Комбинация факторов
     probability = (
-        base_demand * 0.4 + 
-        distance_factor * 0.25 + 
-        price_factor * 0.15 + 
-        spots_factor * 0.05 +
-        time_factor * 0.15
+        base_demand * 0.2
+        + distance_factor * 0.3
+        + price_factor * 0.23
+        + spots_factor * 0.12
+        + time_factor * 0.15
     )
-    
-    # 7. Корректировка для крайних случаев
-    if cost == 0 and distance <= 1.0:
-        probability = max(probability, 0.9 - distance * 0.2)
-    
-    if cost > 500:
-        probability = min(probability, 0.3 * (1 - cost / 2000))
-    
-    # 8. Гарантируем разумные границы
-    probability = max(0.05, min(0.95, probability))
-    
+
+    # 7. Дополнительная корректировка для парковок в центре
+    if distance <= 0.8:
+        boost = 0.16 * (0.8 - distance) / 0.8
+        probability = max(probability, 0.88 + boost)
+
+    if cost <= 0 and distance <= 1.0:
+        probability = max(probability, 0.9 - distance * 0.15)
+
+    # 8. Финальные границы
+    probability = max(0.05, min(0.995, probability))
+
     return round(probability, 3)
 
 def get_occupancy_level(probability):

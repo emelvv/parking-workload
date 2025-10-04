@@ -312,6 +312,87 @@ body {
   color: var(--text-secondary);
 }
 
+.map-section {
+  margin-top: 48px;
+}
+
+.map-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.map-section__title {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.map-section__container {
+  position: relative;
+  height: 520px;
+  background: var(--card-bg);
+  border-radius: var(--radius-large);
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+  transition: var(--transition);
+}
+
+.map-section__canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.map-section__epo {
+  margin-top: 18px;
+}
+
+.epo-result {
+  background: var(--card-bg);
+  border-radius: var(--radius-medium);
+  box-shadow: var(--shadow-soft);
+  padding: 20px 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.epo-result__title {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.epo-result__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.epo-result__label {
+  display: block;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.epo-result__value {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.epo-result__params {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.epo-result--error {
+  background: rgba(255, 235, 230, 0.92);
+  border-left: 4px solid #c03636;
+  color: #6b1e1e;
+}
+
 .status-card--success .status-card__badge,
 .status-card--success .status-card__badge::before {
   color: #0b8c3b;

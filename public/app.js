@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('parking-number');
   const errorField = document.getElementById('lookup-error');
   const card = document.getElementById('status-card');
+  const mapContainer = document.getElementById('map-container');
 
   // Инициализация карты MapGL — создаём карту и включаем клики
   let map = null;
@@ -39,6 +40,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Храним маркеры, если понадобятся
   const markers = [];
+  // Удаляет все маркеры с карты
+  function clearMarkers() {
+    while (markers.length) {
+      const marker = markers.pop();
+      try { marker.remove(); } catch (err) { console.warn(err); }
+    }
+  }
+
+  let latestNearestParking = null;
+  let latestEpoData = null;
+
+  if (map && mapContainer) {
+    const resizeMethods = ['invalidateSize', 'updateSize', 'resize'];
+    for (const method of resizeMethods) {
+      if (typeof map[method] === 'function') {
+        try { map[method](); } catch (err) { console.warn('Не удалось обновить размер карты:', err); }
+        break;
+      }
+    }
+  }
 
   // --- UI / форма ---
   if (form && input) {
@@ -146,6 +167,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderStatus(data) {
+    latestNearestParking = null;
+    latestEpoData = null;
     if (!card) {
       console.warn('renderStatus: card отсутствует', data);
       return;
@@ -317,21 +340,157 @@ document.addEventListener('DOMContentLoaded', () => {
     if (text == null) return '';
     return String(text).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
   }
-  
+
+  function renderNearestParkingCard(parking, epoData) {
+    if (!card) return;
+    if (!parking) {
+      card.innerHTML = `
+        <div class="status-card status-card--empty">
+          <div class="status-card__placeholder">
+            <span class="status-card__emoji" aria-hidden="true">🚗</span>
+            <p class="status-card__text">Здесь появится информация о загруженности выбранной парковки.</p>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const pricePieces = [];
+    if (parking.price_per_hour != null) {
+      pricePieces.push(`${escapeHtml(formatNumber(parking.price_per_hour))} ₽/ч`);
+    }
+    if (parking.price_comment) {
+      pricePieces.push(escapeHtml(parking.price_comment));
+    }
+    const priceText = pricePieces.length ? pricePieces.join(' · ') : 'Стоимость не указана';
+
+    const rawCapacity = parking.capacity ?? parking.total_spaces;
+    const capacityValue = Number.isFinite(Number(rawCapacity))
+      ? formatNumber(Number(rawCapacity))
+      : String(rawCapacity ?? 'н/д');
+    const distanceMeters = Number(parking.distance_to_request_m);
+    const distanceToPoint = Number.isFinite(distanceMeters)
+      ? `${escapeHtml(formatNumber(Math.round(distanceMeters)))} м`
+      : 'н/д';
+    const centerKm = Number(parking.distance_to_center_km);
+    const distanceToCenter = Number.isFinite(centerKm)
+      ? `${escapeHtml(centerKm.toFixed(2))} км`
+      : 'н/д';
+
+    let epoValue = 'рассчитывается…';
+    if (epoData?.error) {
+      epoValue = 'недоступна';
+    } else if (epoData && !epoData.loading) {
+      const percent = epoData.occupancy_percentage != null ? `${epoData.occupancy_percentage}%` : '—';
+      epoValue = `${percent} · ${epoData.occupancy_level ?? 'без данных'}`;
+    }
+    const epoDisplay = escapeHtml(epoValue);
+
+    card.innerHTML = `
+      <div class="status-card">
+        <div class="status-card__header">
+          <div>
+            <p class="status-card__badge">🅿️ Ближайшая парковка</p>
+            <h2 class="status-card__title">${escapeHtml(parking.name ?? 'Без названия')}</h2>
+            <p class="status-card__subtitle">${priceText}</p>
+          </div>
+          <div class="status-card__meta">
+            <span class="status-card__meta-time">До центра: ${distanceToCenter}</span>
+          </div>
+        </div>
+
+        <div class="status-card__stats">
+          <div class="status-card__stat">
+            <span class="status-card__stat-label">До точки</span>
+            <span class="status-card__stat-value">${distanceToPoint}</span>
+          </div>
+          <div class="status-card__stat">
+            <span class="status-card__stat-label">Мест всего</span>
+            <span class="status-card__stat-value">${escapeHtml(capacityValue)}</span>
+          </div>
+          <div class="status-card__stat">
+            <span class="status-card__stat-label">Оценка EPO</span>
+            <span class="status-card__stat-value">${epoDisplay}</span>
+          </div>
+        </div>
+
+        <footer class="status-card__footer">
+          Координаты: ${escapeHtml(parking.coordinates ?? 'н/д')}
+        </footer>
+      </div>
+    `;
+  }
+
+  function renderEpoResult(data) {
+    const container = document.getElementById('epo-result');
+    if (!container) return;
+
+    latestEpoData = data;
+
+    if (data?.loading) {
+      container.innerHTML = `
+        <div class="epo-result">
+          <p>Получаем оценку загруженности…</p>
+        </div>
+      `;
+      if (latestNearestParking) renderNearestParkingCard(latestNearestParking, data);
+      return;
+    }
+
+    const paramsText = data?.parameters
+      ? `Параметры: цена ${escapeHtml(String(data.parameters.cost ?? 'н/д'))} ₽/ч · расстояние ${escapeHtml(String(data.parameters.distance ?? 'н/д'))} км · места ${escapeHtml(String(data.parameters.spots ?? 'н/д'))}`
+      : '';
+
+    if (!data || data.error) {
+      container.innerHTML = `
+        <div class="epo-result epo-result--error">
+          <p>${escapeHtml(data?.error ?? 'Не удалось получить оценку загруженности')}</p>
+          ${paramsText ? `<p class="epo-result__params">${paramsText}</p>` : ''}
+        </div>
+      `;
+      if (latestNearestParking) renderNearestParkingCard(latestNearestParking, data);
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="epo-result">
+        <h3 class="epo-result__title">Оценка загруженности (EPO)</h3>
+        <div class="epo-result__grid">
+          <div>
+            <span class="epo-result__label">Уровень:</span>
+            <span class="epo-result__value">${escapeHtml(data.occupancy_level ?? 'н/д')}</span>
+          </div>
+          <div>
+            <span class="epo-result__label">Заполненность:</span>
+            <span class="epo-result__value">${data.occupancy_percentage != null ? `${data.occupancy_percentage}%` : 'н/д'}</span>
+          </div>
+          <div>
+            <span class="epo-result__label">Контекст времени:</span>
+            <span class="epo-result__value">${escapeHtml(data.time_context ?? 'н/д')}</span>
+          </div>
+        </div>
+        ${paramsText ? `<div class="epo-result__params">${paramsText}</div>` : ''}
+      </div>
+    `;
+
+    if (latestNearestParking) renderNearestParkingCard(latestNearestParking, data);
+  }
+
 async function get_park_on_coords(lat, lng, options = {}) {
   if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
     console.warn('Неверные координаты для поиска парковки:', lat, lng);
     return null;
   }
 
-  const serverUrl = options.serverUrl ?? 'http://127.0.0.1:8001/parking/nearest';
+  const defaultUrl = `${window.location.origin.replace(/\/$/, '')}/api/parking/nearest`;
+  const serverUrl = options.serverUrl ?? defaultUrl;
 
   // Формируем координаты в строку "lat,lng"
   const coordsStr = `${lat},${lng}`;
 
   let responseData;
   try {
-    const url = new URL(serverUrl);
+    const url = new URL(serverUrl, window.location.origin);
     url.searchParams.append('coordinates', coordsStr);
 
     const resp = await fetch(url.toString(), { method: 'GET' });
@@ -351,54 +510,80 @@ async function get_park_on_coords(lat, lng, options = {}) {
     return null;
   }
 
+  const [latStr, lngStr] = String(responseData.parking.coordinates)
+    .split(',')
+    .map((part) => part.trim());
+
   const nearest = {
-    id: responseData.parking.name, // или другой идентификатор, если есть
-    name: responseData.parking.name,
-    lat: Number(responseData.parking.coordinates.split(',')[0]),
-    lng: Number(responseData.parking.coordinates.split(',')[1]),
+    id: responseData.parking.name ?? responseData.parking.id ?? 'nearest-parking',
+    name: responseData.parking.name ?? 'Ближайшая парковка',
+    lat: Number(latStr),
+    lng: Number(lngStr),
     distance: responseData.parking.distance_to_request_m,
-    raw: responseData.parking
+    raw: responseData.parking,
   };
 
+  latestNearestParking = nearest.raw;
+  latestEpoData = null;
+  renderNearestParkingCard(latestNearestParking, latestEpoData);
+
+  const epoParams = {
+    cost: Number(nearest.raw.price_per_hour ?? 0),
+    distance: Number(nearest.raw.distance_to_center_km ?? 0),
+    spots: Number(nearest.raw.capacity ?? 0),
+  };
+
+  renderEpoResult({ loading: true, parameters: epoParams });
+
+  try {
+    const epoUrl = `${window.location.origin.replace(/\/$/, '')}/api/parking/occupancy`;
+    const epoResponse = await fetch(
+      `${epoUrl}?` + new URLSearchParams({
+        cost: String(epoParams.cost),
+        distance: String(epoParams.distance),
+        spots: String(epoParams.spots),
+      }),
+      { method: 'GET' },
+    );
+
+    if (epoResponse.ok) {
+      const epoData = await epoResponse.json();
+      renderEpoResult({ ...epoData, parameters: epoParams });
+    } else {
+      renderEpoResult({ error: 'Сервис EPO вернул ошибку', parameters: epoParams });
+    }
+  } catch (err) {
+    console.warn('Ошибка обращения к сервису EPO:', err);
+    renderEpoResult({ error: 'Не удалось получить данные от EPO', parameters: epoParams });
+  }
+
   // --- Маркер на карте ---
-  if (typeof window.map !== 'undefined') {
-    // Удаляем старый маркер
-    if (window.__nearestParkingMarker) window.__nearestParkingMarker.remove();
+  if (typeof window._parkingApp?.addMarker === 'function') {
+    window.__nearestParkingMarker = null;
+    clearMarkers();
 
-    window.__nearestParkingMarker = new mapgl.Marker(window.map, {
-      coordinates: [nearest.lng, nearest.lat],
-      icon: options.iconUrl ?? 'https://docs.2gis.com/img/mapgl/marker.svg'
-    });
+    const priceText = nearest.raw.price_per_hour != null
+      ? `${nearest.raw.price_per_hour} ₽/час`
+      : nearest.raw.price_comment ?? '';
 
-    // Простое popup окно через DOM
-    const popup = document.createElement('div');
-    popup.className = 'dg-popup';
-    popup.style.cssText = `
-      position:absolute;
-      background:#fff;
-      border-radius:6px;
-      padding:8px;
-      box-shadow:0 4px 12px rgba(0,0,0,0.12);
-      max-width:240px;
-      font-size:12px;
-      color:#333;
-      display:none;
-    `;
-    popup.innerHTML = `<strong>${nearest.name}</strong><div>≈ ${Math.round(nearest.distance)} м</div>`;
-    document.body.appendChild(popup);
-    window.__nearestParkingPopup = popup;
+    const popupText = [nearest.name, priceText, nearest.distance != null ? `≈ ${Math.round(nearest.distance)} м` : null]
+      .filter(Boolean)
+      .join(' · ');
 
-    window.__nearestParkingMarker.on('click', () => {
-      const pos = window.map.transform.lngLatToContainer([nearest.lng, nearest.lat]);
-      popup.style.left = pos[0] + 'px';
-      popup.style.top = (pos[1] - popup.offsetHeight - 10) + 'px';
-      popup.style.display = 'block';
-    });
+    window.__nearestParkingMarker = window._parkingApp.addMarker(
+      nearest.lat,
+      nearest.lng,
+      popupText,
+    );
 
-    // Центрируем карту
-    const curZoom = window.map.getZoom ? window.map.getZoom() : 12;
-    window.map.setCenter([nearest.lng, nearest.lat], { duration: 600, easing: 'easeOutCubic' });
-    window.map.setZoom(Math.max(curZoom + 2, 15), { duration: 600, easing: 'easeOutCubic' });
+    if (window.map) {
+      try {
+        window.map.setCenter([nearest.lng, nearest.lat], { duration: 600, easing: 'easeOutCubic' });
+        window.map.setZoom(17, { duration: 600, easing: 'easeOutCubic' });
+      } catch (err) {
+        console.warn('Ошибка центрирования карты:', err);
+      }
+    }
   }
 
   return nearest;
@@ -414,8 +599,9 @@ async function get_park_on_coords(lat, lng, options = {}) {
       icon: 'https://docs.2gis.com/img/mapgl/marker.svg',
     });
     if (text) {
-      const popup = new mapgl.Popup(map, { coordinates: [parseFloat(lng), parseFloat(lat)], content: escapeHtml(text) });
-      marker.on('click', () => popup.open());
+      marker.on('click', () => {
+        console.info('Информация о парковке:', text);
+      });
     }
     markers.push(marker);
     return marker;
@@ -481,5 +667,6 @@ async function get_park_on_coords(lat, lng, options = {}) {
     requestStatus,
     normalizePayload,
     map,
+    clearMarkers,
   };
 }); // DOMContentLoaded

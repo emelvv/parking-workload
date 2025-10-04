@@ -1,8 +1,12 @@
 from flask import Flask, request, jsonify
 import math
 from datetime import datetime
+import os
 
 app = Flask(__name__)
+
+# Отключаем debug в продакшене
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 def estimate_parking_occupancy(cost, distance, spots, hour=None):
     """
@@ -63,6 +67,23 @@ def get_occupancy_level(probability):
     else:
         return "очень высокая"
 
+def get_time_context(hour):
+    """
+    Возвращает контекстное описание времени суток
+    """
+    if 0 <= hour < 6:
+        return "ночь (минимум загруженности)"
+    elif 6 <= hour < 10:
+        return "утро (растущая загруженность)"
+    elif 10 <= hour < 14:
+        return "обеденное время (пик загруженности)"
+    elif 14 <= hour < 18:
+        return "день (высокая загруженность)"
+    elif 18 <= hour < 22:
+        return "вечер (спадающая загруженность)"
+    else:
+        return "поздний вечер (низкая загруженность)"
+
 @app.route('/api/parking/occupancy', methods=['GET', 'POST'])
 def parking_occupancy():
     """
@@ -70,13 +91,11 @@ def parking_occupancy():
     """
     try:
         if request.method == 'GET':
-            # Для GET запроса - параметры в query string
             cost = float(request.args.get('cost'))
             distance = float(request.args.get('distance'))
             spots = int(request.args.get('spots'))
             hour_str = request.args.get('hour')
         else:
-            # Для POST запроса - параметры в JSON теле
             data = request.get_json()
             cost = float(data.get('cost'))
             distance = float(data.get('distance'))
@@ -96,25 +115,18 @@ def parking_occupancy():
                     'error': 'Hour must be an integer between 0 and 23'
                 }), 400
         else:
-            # Если время не указано, используем текущий час
             hour = datetime.now().hour
         
-        # Проверка обязательных параметров
-        if cost is None or distance is None or spots is None:
-            return jsonify({
-                'error': 'Missing required parameters: cost, distance, spots'
-            }), 400
-        
-        # Проверка на положительные значения
+        # Валидация
         if cost < 0 or distance < 0 or spots <= 0:
             return jsonify({
                 'error': 'Parameters must be positive values'
             }), 400
         
-        # Расчёт вероятности
+        # Расчёт
         probability = estimate_parking_occupancy(cost, distance, spots, hour)
         
-        # Формирование ответа
+        # Ответ
         response = {
             'occupancy_probability': probability,
             'occupancy_percentage': round(probability * 100, 1),
@@ -130,38 +142,31 @@ def parking_occupancy():
         
         return jsonify(response)
     
-    except ValueError as e:
+    except (ValueError, TypeError):
         return jsonify({
             'error': 'Invalid parameter types. Cost and distance should be numbers, spots should be integer'
         }), 400
     except Exception as e:
+        app.logger.error(f"Error: {str(e)}")
         return jsonify({
-            'error': f'Internal server error: {str(e)}'
+            'error': 'Internal server error'
         }), 500
-
-def get_time_context(hour):
-    """
-    Возвращает контекстное описание времени суток
-    """
-    if 0 <= hour < 6:
-        return "ночь (минимум загруженности)"
-    elif 6 <= hour < 10:
-        return "утро (растущая загруженность)"
-    elif 10 <= hour < 14:
-        return "обеденное время (пик загруженности)"
-    elif 14 <= hour < 18:
-        return "день (высокая загруженность)"
-    elif 18 <= hour < 22:
-        return "вечер (спадающая загруженность)"
-    else:
-        return "поздний вечер (низкая загруженность)"
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """
-    Эндпоинт для проверки работоспособности сервиса
-    """
     return jsonify({'status': 'healthy', 'service': 'parking_occupancy_api'})
 
+@app.route('/', methods=['GET'])
+def root():
+    return jsonify({
+        'message': 'Parking Occupancy API',
+        'version': '1.0.0',
+        'endpoints': {
+            'occupancy': '/api/parking/occupancy',
+            'health': '/api/health'
+        }
+    })
+
+# Запуск через python (только для разработки)
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=DEBUG, host='0.0.0.0', port=5000)

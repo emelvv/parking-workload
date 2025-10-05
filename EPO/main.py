@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 import math
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import os
 
 app = Flask(__name__)
@@ -117,7 +117,8 @@ def parking_occupancy():
                     'error': 'Hour must be an integer between 0 and 23'
                 }), 400
         else:
-            hour = datetime.now().hour
+            moscow_tz = timezone(timedelta(hours=3))
+            hour = datetime.now(moscow_tz).hour
         
         # Валидация
         if cost < 0 or distance < 0 or spots <= 0:

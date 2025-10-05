@@ -699,21 +699,8 @@ async function get_park_on_coords(lat, lng, options = {}) {
     const targetZoom = Math.min(currentZoom + 3, 18);
 
     // Используем setCamera с анимацией для 2GIS MapGL
-    try {
-      if (mapInstance && typeof mapInstance.setCamera === 'function') {
-        mapInstance.setCamera({
-          center: [nearest.lng, nearest.lat],
-          zoom: targetZoom,
-          duration: 700,
-          easing: 'easeOutCubic',
-        });
-
-        // Ждём завершения анимации
-        await new Promise(resolve => setTimeout(resolve, 700));
-      }
-    } catch (err) {
-      console.warn('Ошибка анимации карты:', err);
-    }
+    map.setCenter([nearest.lng, nearest.lat], { easing: 'easeOutCubic', duration: 500 });
+	map.setZoom(16, { easing: 'easeOutCubic', duration: 500 });
 
     isAnimating = false;
   });

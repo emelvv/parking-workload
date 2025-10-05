@@ -377,13 +377,35 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!value) return null;
     const normalized = value.replace(/\s+/g, ' ').trim();
     const parts = normalized.split(/[,\s]+/).filter(Boolean);
-    if (parts.length !== 2) return null;
+    if (parts.length !== 2) return getCoordinates(value);
     const lat = Number(parts[0]);
     const lng = Number(parts[1]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return getCoordinates(value);
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return getCoordinates(value);
     return [lat, lng];
   }
+  
+  async function getCoordinates(address) {
+  const url = `https://catalog.api.2gis.com/3.0/items/geocode?q=${encodeURIComponent(address)}&fields=items.point&key=${HACK_CONFIG.key}`;
+  
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.result && data.result.items && data.result.items[0] && data.result.items[0].point) {
+      const [lng, lat] = data.result.items[0].point;
+      console.log(`Координаты: Широта: ${lat}, Долгота: ${lng}`);
+      return { lat, lng };
+    } else {
+      console.error('Координаты не найдены');
+      return null;
+    }
+  } catch (error) {
+    console.error('Ошибка при получении координат:', error);
+    return null;
+  }
+}
+
 
   function renderNearestParkingCard(parking, epoData) {
     if (!card) return;

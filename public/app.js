@@ -42,11 +42,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const markers = [];
   // Удаляет все маркеры с карты
   function clearMarkers() {
-    while (markers.length) {
-      const marker = markers.pop();
-      try { marker.remove(); } catch (err) { console.warn(err); }
-    }
-  }
+	  while (markers.length) {
+		const marker = markers.pop();
+		try {
+		  if (marker && typeof marker.destroy === 'function') {
+			marker.destroy();
+		  } else if (marker && typeof marker.remove === 'function') {
+			marker.remove();
+		  } else {
+			if (marker && marker.getElement && typeof marker.getElement === 'function') {
+			  const el = marker.getElement();
+			  if (el && el.parentNode) el.parentNode.removeChild(el);
+			}
+		  }
+		} catch (err) {
+		  console.warn('Ошибка при уничтожении маркера:', err);
+		}
+	  }
+	}
+
 
   let latestNearestParking = null;
   let latestEpoData = null;
@@ -624,6 +638,7 @@ async function get_park_on_coords(lat, lng, options = {}) {
   // --- MapGL helpers: маркеры и обработка клика ---
   function addMarker(lat, lng, text = '') {
     if (!map) { console.warn('map не инициализирован'); return null; }
+	clearMarkers();
     const marker = new mapgl.Marker(map, {
       coordinates: [parseFloat(lng), parseFloat(lat)],
       icon: 'https://docs.2gis.com/img/mapgl/marker.svg',
@@ -661,7 +676,10 @@ async function get_park_on_coords(lat, lng, options = {}) {
         return;
       }
 
-      if (isAnimating) return;
+      // Вызов функции с координатами в порядке (lat, lng)
+      let nearest = get_park_on_coords(lat, lng);
+	  
+	  if (isAnimating) return;
       isAnimating = true;
 
       const currentZoom = typeof mapInstance.getZoom === 'function' ? mapInstance.getZoom() : 12;
@@ -670,7 +688,7 @@ async function get_park_on_coords(lat, lng, options = {}) {
       // Анимированное центрирование и зум (MapGL поддерживает setCenter/setZoom с опциями)
       try {
         if (typeof mapInstance.setCenter === 'function') {
-          mapInstance.setCenter([lng, lat], { easing: 'easeOutCubic', duration: 700 });
+          mapInstance.setCenter([nearest.lng, nearest.lat], { easing: 'easeOutCubic', duration: 700 });
         }
         if (typeof mapInstance.setZoom === 'function') {
           mapInstance.setZoom(targetZoom, { easing: 'easeOutCubic', duration: 700 });
@@ -678,9 +696,6 @@ async function get_park_on_coords(lat, lng, options = {}) {
       } catch (err) {
         console.warn('Ошибка анимации карты:', err);
       }
-
-      // Вызов функции с координатами в порядке (lat, lng)
-      get_park_on_coords(lat, lng);
 
       // Разрешаем следующий клик после окончания анимации
       setTimeout(() => { isAnimating = false; }, 800);

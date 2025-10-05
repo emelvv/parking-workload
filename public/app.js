@@ -687,12 +687,14 @@ async function get_park_on_coords(lat, lng, options = {}) {
 
       // Анимированное центрирование и зум (MapGL поддерживает setCenter/setZoom с опциями)
       try {
-        if (typeof mapInstance.setCenter === 'function') {
-          mapInstance.setCenter([nearest.lng, nearest.lat], { easing: 'easeOutCubic', duration: 700 });
-        }
-        if (typeof mapInstance.setZoom === 'function') {
-          mapInstance.setZoom(targetZoom, { easing: 'easeOutCubic', duration: 700 });
-        }
+        if (mapInstance && typeof mapInstance.setCamera === 'function') {
+		  mapInstance.setCamera({
+			center: [nearest.lng, nearest.lat],
+			zoom: targetZoom,
+			duration: 700,
+			easing: 'easeOutCubic',
+		  });
+		}
       } catch (err) {
         console.warn('Ошибка анимации карты:', err);
       }

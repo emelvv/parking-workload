@@ -654,55 +654,71 @@ async function get_park_on_coords(lat, lng, options = {}) {
 
   // Включаем отслеживание клика: при клике приближаем карту и вызываем get_park_on_coords(lat, lng)
   function enableClickToZoomAndQuery(mapInstance) {
-    if (!mapInstance || typeof mapInstance.on !== 'function') {
-      console.error('Неправильный объект карты передан в enableClickToZoomAndQuery');
+  if (!mapInstance || typeof mapInstance.on !== 'function') {
+    console.error('Неправильный объект карты передан в enableClickToZoomAndQuery');
+    return;
+  }
+
+  let isAnimating = false;
+
+  mapInstance.on('click', async (e) => {
+    if (isAnimating) return;
+    isAnimating = true;
+
+    let lng, lat;
+
+    // MapGL event: e.lngLat или e.lngLat.toArray()
+    if (e && e.lngLat && typeof e.lngLat.lng !== 'undefined') {
+      lng = e.lngLat.lng;
+      lat = e.lngLat.lat;
+    } else if (e && Array.isArray(e.lngLat) && e.lngLat.length >= 2) {
+      lng = e.lngLat[0];
+      lat = e.lngLat[1];
+    } else {
+      console.error('Не удалось получить координаты клика из события', e);
+      isAnimating = false;
       return;
     }
 
-    let isAnimating = false;
-
-    mapInstance.on('click', (e) => {
-      let lng, lat;
-
-      // MapGL event: e.lngLat или e.lngLat.toArray()
-      if (e && e.lngLat && typeof e.lngLat.lng !== 'undefined') {
-        lng = e.lngLat.lng;
-        lat = e.lngLat.lat;
-      } else if (e && Array.isArray(e.lngLat) && e.lngLat.length >= 2) {
-        lng = e.lngLat[0];
-        lat = e.lngLat[1];
-      } else {
-        console.error('Не удалось получить координаты клика из события', e);
+    let nearest;
+    try {
+      // Ждём результат get_park_on_coords, предполагаем что это async
+      nearest = await get_park_on_coords(lat, lng);
+      if (!nearest || typeof nearest.lat === 'undefined' || typeof nearest.lng === 'undefined') {
+        console.warn('Не найдены координаты ближайшей парковки');
+        isAnimating = false;
         return;
       }
+    } catch (err) {
+      console.error('Ошибка получения координат парковки:', err);
+      isAnimating = false;
+      return;
+    }
 
-      // Вызов функции с координатами в порядке (lat, lng)
-      let nearest = get_park_on_coords(lat, lng);
-	  
-	  if (isAnimating) return;
-      isAnimating = true;
+    const currentZoom = typeof mapInstance.getZoom === 'function' ? mapInstance.getZoom() : 12;
+    const targetZoom = Math.min(currentZoom + 3, 18);
 
-      const currentZoom = typeof mapInstance.getZoom === 'function' ? mapInstance.getZoom() : 12;
-      const targetZoom = Math.min(currentZoom + 3, 18);
+    // Используем setCamera с анимацией для 2GIS MapGL
+    try {
+      if (mapInstance && typeof mapInstance.setCamera === 'function') {
+        mapInstance.setCamera({
+          center: [nearest.lng, nearest.lat],
+          zoom: targetZoom,
+          duration: 700,
+          easing: 'easeOutCubic',
+        });
 
-      // Анимированное центрирование и зум (MapGL поддерживает setCenter/setZoom с опциями)
-      try {
-        if (mapInstance && typeof mapInstance.setCamera === 'function') {
-		  mapInstance.setCamera({
-			center: [nearest.lng, nearest.lat],
-			zoom: targetZoom,
-			duration: 700,
-			easing: 'easeOutCubic',
-		  });
-		}
-      } catch (err) {
-        console.warn('Ошибка анимации карты:', err);
+        // Ждём завершения анимации
+        await new Promise(resolve => setTimeout(resolve, 700));
       }
+    } catch (err) {
+      console.warn('Ошибка анимации карты:', err);
+    }
 
-      // Разрешаем следующий клик после окончания анимации
-      setTimeout(() => { isAnimating = false; }, 800);
-    });
-  }
+    isAnimating = false;
+  });
+}
+
 
   // Включаем слушатель клика, если карта проинициализирована
   if (map) enableClickToZoomAndQuery(map);
